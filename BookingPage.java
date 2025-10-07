@@ -1,3 +1,4 @@
+// BookingPage.java
 import javax.swing.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -5,6 +6,8 @@ import java.util.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * BookingPage - Booking form JFrame
@@ -17,33 +20,25 @@ public class BookingPage extends JFrame {
     private JSpinner pickupDateSpinner, dropDateSpinner;
     private JTextField pickupLocField, dropoffLocField;
     private JComboBox<String> carCombo;
-    private JPanel carPreviewPanel;
-    private JLabel priceLabel;   // to show price
+    private JLabel priceLabel;
 
     private final SimpleDateFormat dbDateFormat =
             new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    // Car daily rents
-    private final Map<String, Integer> carPrices = Map.of(
-            "Mercedes C-Class", 900,
-            "BMW 7 Series", 850,
-            "Audi A8", 940,
-            "Toyota Alphard", 900,
-            "Range Rover", 1000,
-            "Lexus LS", 999,
-            "Mercedes E-Class", 1000,
-            "Land Rover Defender", 1200
-    );
+    // MODIFIED: Static map to hold DB data
+    private static Map<String, Integer> carPrices = new LinkedHashMap<>();
+    
+    // NEW: DAO instance to load data from DB
+    private static final CarDAO carDAO = new CarDAO();
+
 
     public BookingPage() {
         setTitle("Booking");
 
-        // ---- Full screen ----
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        // ---- Background Wallpaper (auto-fit to screen) ----
-        ImageIcon bgIcon = new ImageIcon("ddd.jpeg"); // put your wallpaper here
+        ImageIcon bgIcon = new ImageIcon("ddd1.jpeg"); 
         Image bgImage = bgIcon.getImage();
 
         JPanel background = new JPanel(new BorderLayout()) {
@@ -53,30 +48,42 @@ public class BookingPage extends JFrame {
                 g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
             }
         };
-        setContentPane(background);  // set wallpaper as base
+        setContentPane(background); 
 
-        // ----- Header Title -----
         JLabel title = new JLabel("Book your perfect car", SwingConstants.CENTER);
         title.setFont(new Font("Arial", Font.BOLD, 32));
         title.setForeground(Color.WHITE);
         background.add(title, BorderLayout.NORTH);
 
-        // ----- Form area -----
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        centerPanel.setOpaque(false);
+        background.add(centerPanel, BorderLayout.CENTER);
+
+
         JPanel form = new JPanel(new GridBagLayout());
-        form.setOpaque(false); // transparent to show wallpaper
+        form.setOpaque(false); 
+        form.setBackground(new Color(255, 255, 255, 50)); 
         form.setBorder(BorderFactory.createEmptyBorder(16, 24, 24, 24));
+        
+        GridBagConstraints formConstraints = new GridBagConstraints();
+        formConstraints.anchor = GridBagConstraints.EAST; 
+        formConstraints.weightx = 1.0; 
+        centerPanel.add(form, formConstraints);
+
+
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(8, 8, 8, 8);
         gc.anchor = GridBagConstraints.WEST;
         gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.weightx = 0.5;
 
         // Row 0: Name, Email
         gc.gridx = 0; gc.gridy = 0;
         JLabel nameLbl = new JLabel("Name:");
         nameLbl.setForeground(Color.WHITE);
         form.add(nameLbl, gc);
-        gc.gridx = 1; gc.weightx = 0.5;
-        nameField = new JTextField();
+        gc.gridx = 1;
+        nameField = new JTextField(15);
         form.add(nameField, gc);
 
         gc.gridx = 2;
@@ -84,7 +91,7 @@ public class BookingPage extends JFrame {
         emailLbl.setForeground(Color.WHITE);
         form.add(emailLbl, gc);
         gc.gridx = 3;
-        emailField = new JTextField();
+        emailField = new JTextField(15);
         form.add(emailField, gc);
 
         // Row 1: Phone
@@ -93,7 +100,7 @@ public class BookingPage extends JFrame {
         phoneLbl.setForeground(Color.WHITE);
         form.add(phoneLbl, gc);
         gc.gridx = 1; gc.gridwidth = 3;
-        phoneField = new JTextField();
+        phoneField = new JTextField(30);
         form.add(phoneField, gc);
         gc.gridwidth = 1;
 
@@ -103,7 +110,7 @@ public class BookingPage extends JFrame {
         addrLbl.setForeground(Color.WHITE);
         form.add(addrLbl, gc);
         gc.gridx = 1; gc.gridwidth = 3;
-        addressArea = new JTextArea(3, 20);
+        addressArea = new JTextArea(3, 30);
         JScrollPane sp = new JScrollPane(addressArea);
         form.add(sp, gc);
         gc.gridwidth = 1;
@@ -144,7 +151,7 @@ public class BookingPage extends JFrame {
         plocLbl.setForeground(Color.WHITE);
         form.add(plocLbl, gc);
         gc.gridx = 1;
-        pickupLocField = new JTextField();
+        pickupLocField = new JTextField(15);
         form.add(pickupLocField, gc);
 
         gc.gridx = 2;
@@ -152,44 +159,35 @@ public class BookingPage extends JFrame {
         dlocLbl.setForeground(Color.WHITE);
         form.add(dlocLbl, gc);
         gc.gridx = 3;
-        dropoffLocField = new JTextField();
+        dropoffLocField = new JTextField(15);
         form.add(dropoffLocField, gc);
 
-        // Row 5: Car selection + preview
+        // Row 5: Car selection + Price
         gc.gridx = 0; gc.gridy = 5;
         JLabel carLbl = new JLabel("Select Car:");
         carLbl.setForeground(Color.WHITE);
         form.add(carLbl, gc);
         gc.gridx = 1;
-        String[] cars = {"Mercedes C-Class", "BMW 7 Series", "Audi A8",
-                "Toyota Alphard", "Range Rover", "Lexus LS", "Mercedes E-Class", "Land Rover Defender"};
-        carCombo = new JComboBox<>(cars);
+        
+        carCombo = new JComboBox<>();
         form.add(carCombo, gc);
 
         gc.gridx = 2; gc.gridwidth = 2;
-        carPreviewPanel = new JPanel();
-        carPreviewPanel.setPreferredSize(new Dimension(400, 250));
-        carPreviewPanel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        carPreviewPanel.setLayout(new BorderLayout());
-        carPreviewPanel.setOpaque(false);
-
-        // Price label under car preview
-        priceLabel = new JLabel("Price: $0", SwingConstants.CENTER);
+        priceLabel = new JLabel("Price: $0", SwingConstants.LEFT);
         priceLabel.setFont(new Font("Arial", Font.BOLD, 14));
         priceLabel.setForeground(Color.WHITE);
-
-        carPreviewPanel.add(priceLabel, BorderLayout.SOUTH);
-        form.add(carPreviewPanel, gc);
+        form.add(priceLabel, gc);
         gc.gridwidth = 1;
 
         // Bottom: Submit button
+        gc.gridx = 0; gc.gridy = 6; gc.gridwidth = 4;
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         bottom.setOpaque(false);
         JButton submitBtn = new JButton("Submit Booking");
         bottom.add(submitBtn);
+        form.add(bottom, gc);
+        gc.gridwidth = 1;
 
-        background.add(form, BorderLayout.CENTER);
-        background.add(bottom, BorderLayout.SOUTH);
 
         // Listeners
         carCombo.addActionListener(e -> updateCarPreview());
@@ -197,71 +195,70 @@ public class BookingPage extends JFrame {
         dropDateSpinner.addChangeListener(e -> updateCarPreview());
         submitBtn.addActionListener(e -> submitBooking());
 
+        // FIX: Load data from the DB and populate the JComboBox
+        loadCarPricesFromDB(); 
+        repopulateCarCombo(); // Must call this to populate the dropdown
         updateCarPreview();
         
-        // FIX: Make the frame visible when instantiated by CarRentalUI
         this.setVisible(true);
     }
+    
+    /**
+     * Loads car data from the database into the static carPrices map.
+     * Called when the BookingPage opens and by AdminFrame after modifications.
+     */
+    public static void loadCarPricesFromDB() {
+        carPrices = carDAO.loadAllCars();
+        // The carDAO constructor ensures the table is created and populated with defaults
+        // System.out.println("Car list reloaded from DB. Total cars: " + carPrices.size());
+    }
 
-    // Show preview + price
-    private void updateCarPreview() {
-        String car = (String) carCombo.getSelectedItem();
-
-        // Car images
-        Map<String, String> map = new HashMap<>();
-        map.put("Mercedes C-Class", "images/mercedes.jpg");
-        map.put("BMW 7 Series", "images/7series.jpg");
-        map.put("Audi A8", "images/audi.jpg");
-        map.put("Toyota Alphard", "images/toyota.jpg");
-        map.put("Range Rover", "images/range.jpg");
-        map.put("Lexus LS", "images/lexus.jpg");
-        map.put("Mercedes E-Class", "images/Eclass.jpg");
-        map.put("Land Rover Defender", "images/Land Rover Defender.jpg");
-
-        String fn = map.getOrDefault(car, null);
-
-        carPreviewPanel.removeAll();
-        carPreviewPanel.setLayout(new BorderLayout());
-
-        if (fn != null) {
-            ImageIcon icon = new ImageIcon(fn);
-            if (icon.getIconWidth() > 0) {
-                int boxW = 400, boxH = 200;
-                int imgW = icon.getIconWidth();
-                int imgH = icon.getIconHeight();
-                double scale = Math.min((double) boxW / imgW, (double) boxH / imgH);
-
-                int newW = (int) (imgW * scale);
-                int newH = (int) (imgH * scale);
-
-                Image img = icon.getImage().getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
-                JLabel imgLabel = new JLabel(new ImageIcon(img), SwingConstants.CENTER);
-
-                JLabel nameLabel = new JLabel(car, SwingConstants.CENTER);
-                nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
-                nameLabel.setForeground(Color.WHITE);
-
-                carPreviewPanel.add(nameLabel, BorderLayout.NORTH);
-                carPreviewPanel.add(imgLabel, BorderLayout.CENTER);
-            }
+    /**
+     * Repopulates the JComboBox with the current cars from the static carPrices map.
+     */
+    private void repopulateCarCombo() {
+        carCombo.removeAllItems();
+        for (String carModel : carPrices.keySet()) {
+            carCombo.addItem(carModel);
         }
+        if (carCombo.getItemCount() > 0) {
+            carCombo.setSelectedIndex(0);
+        }
+    }
 
+
+    private void updateCarPreview() {
+        if (carPrices.isEmpty() || carCombo.getSelectedItem() == null) {
+            priceLabel.setText("Price: $0 (No Cars Available)");
+            return;
+        }
+        
+        String car = (String) carCombo.getSelectedItem();
         int dailyRent = carPrices.getOrDefault(car, 0);
         java.util.Date pickup = (java.util.Date) pickupDateSpinner.getValue();
         java.util.Date drop = (java.util.Date) dropDateSpinner.getValue();
 
-        long diff = Math.max(1,
-                (drop.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24));
-        int totalPrice = dailyRent * (int) diff;
+        if (drop.before(pickup) || drop.equals(pickup)) {
+            priceLabel.setText("Price: $0 (Invalid Dates)");
+            return;
+        }
+
+        long diffMs = drop.getTime() - pickup.getTime();
+        long diffDays = diffMs / (1000 * 60 * 60 * 24);
+        long days = Math.max(1, diffDays);
+        
+        if (diffMs > 0 && diffDays == 0) {
+            days = 1;
+        }
+
+        int totalPrice = dailyRent * (int) days;
 
         priceLabel.setText("Price: $" + totalPrice);
-        carPreviewPanel.add(priceLabel, BorderLayout.SOUTH);
-
-        carPreviewPanel.revalidate();
-        carPreviewPanel.repaint();
     }
 
-    // Save booking to DB and open PaymentPage
+    /**
+     * Handles the booking submission, saves to DB, and immediately opens the PaymentPage.
+     */
     private void submitBooking() {
         String name = nameField.getText().trim();
         String email = emailField.getText().trim();
@@ -273,11 +270,24 @@ public class BookingPage extends JFrame {
         String dropoffLoc = dropoffLocField.getText().trim();
         String car = (String) carCombo.getSelectedItem();
         
-        // 1. Calculate the price
         int dailyRent = carPrices.getOrDefault(car, 0);
-        long diff = Math.max(1,
-                (drop.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24));
-        int totalPrice = dailyRent * (int) diff;
+        
+        if (!drop.after(pickup)) {
+            JOptionPane.showMessageDialog(this,
+                    "Drop date must be after pickup date.",
+                    "Validation", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        long diffMs = drop.getTime() - pickup.getTime();
+        long diffDays = diffMs / (1000 * 60 * 60 * 24);
+        long days = Math.max(1, diffDays);
+        
+        if (diffMs > 0 && diffDays == 0) {
+            days = 1;
+        }
+
+        int totalPrice = dailyRent * (int) days;
 
 
         if (name.isEmpty() || email.isEmpty() || phone.isEmpty()) {
@@ -286,18 +296,11 @@ public class BookingPage extends JFrame {
                     "Validation", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (!drop.after(pickup)) {
-            JOptionPane.showMessageDialog(this,
-                    "Drop date must be after pickup date.",
-                    "Validation", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
         
-        // 2. Update SQL query to include 'price' column (total 10 columns)
-        // NOTE: Ensure your MySQL table 'bookings' has a 'price' column of type INT or DECIMAL.
+        
         String sql = "INSERT INTO bookings "
                 + "(name,email,phone,address,car,pickup_date,drop_date,pickup_location,dropoff_location,price) "
-                + "VALUES (?,?,?,?,?,?,?,?,?,?)"; // 10 placeholders
+                + "VALUES (?,?,?,?,?,?,?,?,?,?)"; 
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -310,11 +313,10 @@ public class BookingPage extends JFrame {
             ps.setTimestamp(7, new java.sql.Timestamp(drop.getTime()));
             ps.setString(8, pickupLoc);
             ps.setString(9, dropoffLoc);
-            // 3. Bind the calculated price to the 10th placeholder
             ps.setInt(10, totalPrice); 
 
             ps.executeUpdate();
-            System.out.println("Booking saved to DB");
+            System.out.println("Booking saved to DB. Opening Payment Page.");
         } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this,
@@ -323,20 +325,21 @@ public class BookingPage extends JFrame {
             return;
         }
 
-        JOptionPane.showMessageDialog(this,
-                "Booking saved successfully!",
-                "Success", JOptionPane.INFORMATION_MESSAGE);
+        // --- CHANGE START: Transition directly to Payment Page ---
+        // Removed success JOptionPane
 
-        // MODIFIED: Added totalPrice to the PaymentPage constructor call
+        // Instantiate PaymentPage with all required details, including price
         PaymentPage payment = new PaymentPage(
-                name, email, phone, car, pickup, drop,
-                pickupLoc, dropoffLoc, totalPrice // <--- NEW ARGUMENT
+            name, email, phone, car, pickup, drop,
+            pickupLoc, dropoffLoc, totalPrice
         );
         payment.setVisible(true);
-        this.dispose();
-        clearForm();
+        this.dispose(); // Close the BookingPage window
+        // --- CHANGE END ---
     }
 
+    // clearForm() is now unnecessary after submit as the page is disposed, 
+    // but kept here for completeness in case it was used elsewhere.
     private void clearForm() {
         nameField.setText("");
         emailField.setText("");
@@ -347,7 +350,10 @@ public class BookingPage extends JFrame {
                 new java.util.Date(System.currentTimeMillis() + 3600 * 1000));
         pickupLocField.setText("");
         dropoffLocField.setText("");
-        carCombo.setSelectedIndex(0);
+        
+        if (carCombo.getItemCount() > 0) {
+            carCombo.setSelectedIndex(0);
+        }
         updateCarPreview();
     }
 
